@@ -1,0 +1,18 @@
+[package]
+name = "memex-ingest"
+description = "Content ingestion — forward-pass through librarian model, KV cache population"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+memex-shards = { path = "../memex-shards" }
+memex-consent = { path = "../memex-consent" }
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+bytes.workspace = true
