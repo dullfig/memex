@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 /// A parsed shard identifier: `{namespace}.{category}.{entity_id}`.
@@ -9,7 +10,11 @@ pub struct ShardId {
 }
 
 impl ShardId {
-    pub fn new(namespace: impl Into<String>, category: impl Into<String>, entity_id: impl Into<String>) -> Self {
+    pub fn new(
+        namespace: impl Into<String>,
+        category: impl Into<String>,
+        entity_id: impl Into<String>,
+    ) -> Self {
         Self {
             namespace: namespace.into(),
             category: category.into(),
@@ -46,4 +51,18 @@ pub enum ShardState {
     Resident,
     /// In sled only, not on GPU.
     Cold,
+}
+
+/// Metadata about a shard.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShardMeta {
+    pub id: ShardId,
+    pub state: ShardState,
+    pub created_at: DateTime<Utc>,
+    /// Number of tokens in this shard's KV cache.
+    pub token_count: u64,
+    /// Size in bytes of the serialized KV data.
+    pub byte_size: u64,
+    /// Whether this shard should be pinned in GPU memory.
+    pub pinned: bool,
 }

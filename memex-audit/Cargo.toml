@@ -13,3 +13,6 @@ tracing.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
+chrono.workspace = true
+sha2.workspace = true
+sled.workspace = true

@@ -15,3 +15,5 @@ thiserror.workspace = true
 sled.workspace = true
 uuid.workspace = true
 bytes.workspace = true
+chrono.workspace = true
+async-trait.workspace = true
