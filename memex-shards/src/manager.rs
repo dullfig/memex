@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::{bail, Result};
 use chrono::Utc;
 
-use crate::cortex::{CortexClient, CortexRetrievalResponse};
+use crate::cortex::{CortexClient, CortexRetrievalResponse, TokenizeResponse};
 use crate::shard::{ShardId, ShardMeta, ShardState};
 
 /// Manages shard lifecycle: creation, persistence (sled), and GPU residency (cortex).
@@ -153,6 +153,11 @@ impl ShardManager {
             Some(v) => Ok(serde_json::from_slice(&v)?),
             None => Ok(vec![]),
         }
+    }
+
+    /// Tokenize text using cortex's model tokenizer.
+    pub async fn tokenize(&self, text: &str, add_bos: bool) -> Result<TokenizeResponse> {
+        self.cortex.tokenize(text, add_bos).await
     }
 
     /// Run retrieval across shards via cortex. Caller (RetrievalPipeline)

@@ -9,7 +9,7 @@ pub mod manager;
 pub mod shard;
 pub mod sidecar;
 
-pub use cortex::{CacheInfo, CortexClient, CortexRetrievalResponse, HttpCortexClient, RawHit, StubCortexClient};
+pub use cortex::{CacheInfo, CortexClient, CortexRetrievalResponse, HttpCortexClient, RawHit, StubCortexClient, TokenizeResponse};
 pub use manager::ShardManager;
 pub use shard::{ShardId, ShardMeta, ShardState};
 pub use sidecar::{PositionMap, SourceRef};

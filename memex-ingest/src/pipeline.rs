@@ -13,11 +13,6 @@ pub struct IngestRequest {
     pub content_id: String,
     /// The text content to ingest.
     pub content: String,
-    /// Pre-tokenized content. If empty, the pipeline will use a rough
-    /// approximation (whitespace split → placeholder IDs) until a real
-    /// tokenizer is wired in.
-    #[serde(default)]
-    pub tokens: Vec<u32>,
     /// Target shard.
     pub shard: ShardId,
     /// Consent token authorizing this ingestion.
@@ -47,7 +42,7 @@ pub enum IngestError {
     Internal(#[from] anyhow::Error),
 }
 
-/// Orchestrates the ingestion pipeline: consent → forward pass → shard append → audit.
+/// Orchestrates the ingestion pipeline: consent → tokenize → shard append → audit.
 pub struct IngestPipeline {
     shards: Arc<ShardManager>,
     consent: Arc<dyn ConsentVerifier>,
@@ -88,27 +83,20 @@ impl IngestPipeline {
             .await
             .map_err(IngestError::Internal)?;
 
-        // 4. Determine tokens to append.
-        //    If caller provided pre-tokenized data, use it.
-        //    Otherwise approximate — real tokenization requires cortex
-        //    to expose a /v1/tokenize endpoint (TODO).
-        let tokens = if !req.tokens.is_empty() {
-            req.tokens.clone()
-        } else {
-            // Rough placeholder: one "token" per ~4 chars.
-            // This is wrong but lets the pipeline run end-to-end
-            // before cortex exposes tokenization.
-            let approx_count = (req.content.len() / 4).max(1);
-            vec![0u32; approx_count]
-        };
+        // 4. Tokenize content via cortex.
+        let tokenized = self
+            .shards
+            .tokenize(&req.content, false)
+            .await
+            .map_err(IngestError::Internal)?;
 
         // Record the offset before appending.
         let offset = meta.token_count;
-        let token_count = tokens.len() as u64;
+        let token_count = tokenized.count as u64;
 
         // 5. Append tokens to shard (sled + cortex).
         self.shards
-            .append_tokens(&req.shard, &tokens)
+            .append_tokens(&req.shard, &tokenized.tokens)
             .await
             .map_err(IngestError::Internal)?;
 

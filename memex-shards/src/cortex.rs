@@ -32,6 +32,13 @@ pub struct CortexRetrievalResponse {
     pub corpus_tokens: u64,
 }
 
+/// Response from cortex's tokenize endpoint.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TokenizeResponse {
+    pub tokens: Vec<u32>,
+    pub count: usize,
+}
+
 // ---------------------------------------------------------------------------
 // Trait
 // ---------------------------------------------------------------------------
@@ -39,6 +46,7 @@ pub struct CortexRetrievalResponse {
 /// Abstraction over cortex's cache and retrieval endpoints.
 ///
 /// Matches cortex's actual HTTP API:
+///   POST /v1/tokenize          → tokenize
 ///   POST /v1/cache/load        → load_cache
 ///   POST /v1/cache/append      → append_tokens
 ///   GET  /v1/cache/{id}        → check_cache
@@ -46,6 +54,9 @@ pub struct CortexRetrievalResponse {
 ///   POST /v1/chat/completions  → retrieve (with mode: "retrieve")
 #[async_trait::async_trait]
 pub trait CortexClient: Send + Sync {
+    /// Tokenize text using cortex's model tokenizer.
+    async fn tokenize(&self, text: &str, add_bos: bool) -> Result<TokenizeResponse>;
+
     /// Create a cache slot and optionally replay tokens into it.
     /// Cortex auto-prepends sink tokens.
     async fn load_cache(&self, cache_id: &str, tokens: &[u32]) -> Result<CacheInfo>;
@@ -78,6 +89,14 @@ pub struct StubCortexClient;
 
 #[async_trait::async_trait]
 impl CortexClient for StubCortexClient {
+    async fn tokenize(&self, text: &str, _add_bos: bool) -> Result<TokenizeResponse> {
+        // Approximate: ~1 token per 4 chars.
+        let count = (text.len() / 4).max(1);
+        let tokens = vec![0u32; count];
+        tracing::info!(text_len = text.len(), count, "stub: tokenize");
+        Ok(TokenizeResponse { tokens, count })
+    }
+
     async fn load_cache(&self, cache_id: &str, tokens: &[u32]) -> Result<CacheInfo> {
         tracing::info!(cache_id, token_count = tokens.len(), "stub: load_cache");
         Ok(CacheInfo {
@@ -175,8 +194,38 @@ struct ChatMessage {
     content: String,
 }
 
+#[derive(Serialize)]
+struct TokenizeReq {
+    text: String,
+    add_bos: bool,
+}
+
 #[async_trait::async_trait]
 impl CortexClient for HttpCortexClient {
+    async fn tokenize(&self, text: &str, add_bos: bool) -> Result<TokenizeResponse> {
+        let url = format!("{}/v1/tokenize", self.base_url);
+        let resp = self
+            .http
+            .post(&url)
+            .json(&TokenizeReq {
+                text: text.to_owned(),
+                add_bos,
+            })
+            .send()
+            .await
+            .context("cortex tokenize request failed")?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            bail!("cortex tokenize returned {status}: {body}");
+        }
+
+        resp.json::<TokenizeResponse>()
+            .await
+            .context("cortex tokenize: invalid response")
+    }
+
     async fn load_cache(&self, cache_id: &str, tokens: &[u32]) -> Result<CacheInfo> {
         let url = format!("{}/v1/cache/load", self.base_url);
         let resp = self
