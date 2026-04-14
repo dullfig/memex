@@ -80,7 +80,7 @@ impl RetrievalPipeline {
             }
         }
 
-        // 2. Ensure all shards are resident.
+        // 2. Ensure all shards exist and are resident.
         for shard_id in &req.shards {
             let meta = self
                 .shards
@@ -96,21 +96,20 @@ impl RetrievalPipeline {
                 .map_err(RetrievalError::Internal)?;
         }
 
-        // 3. Query cortex for raw attention hits.
-        let raw_hits = self
+        // 3. Query cortex for raw attention hits via ShardManager.
+        let cortex_resp = self
             .shards
-            .cortex()
             .retrieve(&req.shards, &req.query, req.top_k)
             .await
             .map_err(RetrievalError::Internal)?;
 
         // 4. Resolve positions to source content IDs.
-        let mut hits = Vec::with_capacity(raw_hits.len());
-        for raw in &raw_hits {
-            let shard_id = ShardId::parse(&raw.shard);
+        let mut hits = Vec::with_capacity(cortex_resp.spans.len());
+        for span in &cortex_resp.spans {
+            let shard_id = ShardId::parse(&span.shard);
             let source_id = if let Some(sid) = &shard_id {
                 self.positions
-                    .resolve(sid, raw.offset)
+                    .resolve(sid, span.offset)
                     .ok()
                     .flatten()
                     .map(|r| r.content_id)
@@ -119,10 +118,10 @@ impl RetrievalPipeline {
             };
 
             hits.push(RetrievalHit {
-                shard: raw.shard.clone(),
-                offset: raw.offset,
-                length: raw.length,
-                score: raw.score,
+                shard: span.shard.clone(),
+                offset: span.offset,
+                length: 0, // cortex returns individual positions, not spans
+                score: span.score,
                 source_id,
             });
         }
@@ -152,7 +151,11 @@ impl RetrievalPipeline {
                 },
                 &req.actor,
                 &namespace,
-                serde_json::json!({ "purpose": req.purpose, "query_id": query_id }),
+                serde_json::json!({
+                    "purpose": req.purpose,
+                    "query_id": query_id,
+                    "corpus_tokens": cortex_resp.corpus_tokens,
+                }),
             )
             .await;
 

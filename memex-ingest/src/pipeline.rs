@@ -13,6 +13,11 @@ pub struct IngestRequest {
     pub content_id: String,
     /// The text content to ingest.
     pub content: String,
+    /// Pre-tokenized content. If empty, the pipeline will use a rough
+    /// approximation (whitespace split → placeholder IDs) until a real
+    /// tokenizer is wired in.
+    #[serde(default)]
+    pub tokens: Vec<u32>,
     /// Target shard.
     pub shard: ShardId,
     /// Consent token authorizing this ingestion.
@@ -24,7 +29,7 @@ pub struct IngestRequest {
 pub struct IngestResult {
     pub content_id: String,
     pub shard: String,
-    /// Number of tokens produced by the forward pass.
+    /// Number of tokens appended.
     pub token_count: u64,
     /// Token offset within the shard where this content starts.
     pub offset: u64,
@@ -69,37 +74,50 @@ impl IngestPipeline {
         // 1. Verify consent.
         self.consent.verify(&req.consent_token).await?;
 
-        // 2. Ensure shard exists and is resident.
-        self.shards
+        // 2. Ensure shard exists.
+        let meta = self
+            .shards
             .get_meta(&req.shard)
             .await
             .map_err(IngestError::Internal)?
             .ok_or_else(|| IngestError::ShardNotFound(req.shard.to_string()))?;
 
+        // 3. Ensure shard is resident on GPU.
         self.shards
             .ensure_resident(&req.shard)
             .await
             .map_err(IngestError::Internal)?;
 
-        // 3. Forward-pass through cortex and append KV.
-        //    For now, the "data" is the raw text bytes. When cortex is ready,
-        //    this will be the KV cache bytes from a forward pass.
-        let data = req.content.as_bytes();
+        // 4. Determine tokens to append.
+        //    If caller provided pre-tokenized data, use it.
+        //    Otherwise approximate — real tokenization requires cortex
+        //    to expose a /v1/tokenize endpoint (TODO).
+        let tokens = if !req.tokens.is_empty() {
+            req.tokens.clone()
+        } else {
+            // Rough placeholder: one "token" per ~4 chars.
+            // This is wrong but lets the pipeline run end-to-end
+            // before cortex exposes tokenization.
+            let approx_count = (req.content.len() / 4).max(1);
+            vec![0u32; approx_count]
+        };
+
+        // Record the offset before appending.
+        let offset = meta.token_count;
+        let token_count = tokens.len() as u64;
+
+        // 5. Append tokens to shard (sled + cortex).
         self.shards
-            .append_data(&req.shard, data)
+            .append_tokens(&req.shard, &tokens)
             .await
             .map_err(IngestError::Internal)?;
 
-        // Approximate token count (will be accurate once cortex returns real counts).
-        let token_count = (req.content.len() / 4) as u64;
-        let offset = 0; // Will come from cortex response.
-
-        // 4. Record position-to-source mapping.
+        // 6. Record position-to-source mapping.
         self.positions
             .record(&req.shard, offset, token_count as u32, &req.content_id)
             .map_err(IngestError::Internal)?;
 
-        // 5. Audit.
+        // 7. Audit.
         let _ = self
             .audit
             .append(
@@ -109,7 +127,7 @@ impl IngestPipeline {
                 },
                 &req.consent_token.source_entity,
                 &req.shard.namespace,
-                serde_json::json!({}),
+                serde_json::json!({ "token_count": token_count }),
             )
             .await;
 

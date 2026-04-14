@@ -17,6 +17,9 @@ pub fn router() -> Router<AppState> {
 struct IngestHttpRequest {
     content_id: String,
     content: String,
+    /// Pre-tokenized content. If omitted, the pipeline approximates.
+    #[serde(default)]
+    tokens: Vec<u32>,
     /// Shard key in `namespace.category.entity_id` format.
     shard: String,
     consent_token: ConsentToken,
@@ -42,6 +45,7 @@ async fn ingest(
         .ingest(IngestRequest {
             content_id: req.content_id,
             content: req.content,
+            tokens: req.tokens,
             shard: shard_id,
             consent_token: req.consent_token,
         })

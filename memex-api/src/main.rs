@@ -4,7 +4,9 @@ use memex_audit::AuditLog;
 use memex_consent::StubConsentVerifier;
 use memex_ingest::IngestPipeline;
 use memex_retrieval::RetrievalPipeline;
-use memex_shards::{PositionMap, ShardManager, StubCortexClient};
+use memex_shards::{
+    CortexClient, HttpCortexClient, PositionMap, ShardManager, StubCortexClient,
+};
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::EnvFilter;
@@ -20,13 +22,24 @@ async fn main() -> anyhow::Result<()> {
 
     let bind_addr = std::env::var("MEMEX_BIND").unwrap_or_else(|_| "127.0.0.1:7720".into());
     let sled_path = std::env::var("MEMEX_DB").unwrap_or_else(|_| "memex.db".into());
+    let cortex_url = std::env::var("CORTEX_URL").ok();
+
+    let cortex: Arc<dyn CortexClient> = match &cortex_url {
+        Some(url) => {
+            tracing::info!(url, "connecting to cortex");
+            Arc::new(HttpCortexClient::new(url))
+        }
+        None => {
+            tracing::warn!("CORTEX_URL not set — using stub client (no GPU, no real retrieval)");
+            Arc::new(StubCortexClient)
+        }
+    };
+
+    let consent: Arc<dyn memex_consent::ConsentVerifier> = Arc::new(StubConsentVerifier);
 
     tracing::info!(bind = %bind_addr, db = %sled_path, "starting memex");
 
     let db = sled::open(&sled_path)?;
-    let cortex = Arc::new(StubCortexClient);
-    let consent: Arc<dyn memex_consent::ConsentVerifier> = Arc::new(StubConsentVerifier);
-
     let shard_manager = Arc::new(ShardManager::new(db.clone(), cortex));
     let position_map = Arc::new(PositionMap::open(&db)?);
     let audit_log = Arc::new(AuditLog::open(&db)?);

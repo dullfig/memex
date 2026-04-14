@@ -17,3 +17,4 @@ uuid.workspace = true
 bytes.workspace = true
 chrono.workspace = true
 async-trait.workspace = true
+reqwest.workspace = true
