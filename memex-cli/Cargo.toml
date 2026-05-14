@@ -1,0 +1,24 @@
+[package]
+name = "memex-cli"
+description = "Operator CLI for memex — corpus ingest, shard maintenance, smoke retrieval"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "memex-cli"
+path = "src/main.rs"
+
+[dependencies]
+memex-consent.workspace = true
+memex-ingest.workspace = true
+agentos-wasm = { path = "../../AgentOS/crates/wasm" }
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+anyhow.workspace = true
+reqwest.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+clap.workspace = true

@@ -1,0 +1,23 @@
+[package]
+name = "bhs-corpus-driver"
+version = "0.1.0"
+edition = "2021"
+description = "Memex ingestion driver for the BHS markdown corpus — walks *.md, strips YAML frontmatter, emits chunks"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen = "0.41"
+
+[profile.release]
+# Component size matters less than build time on a small driver, but
+# strip + lto cut artifact size by ~3x and make the wasm easier to
+# inspect in the field.
+opt-level = "s"
+lto = true
+strip = "debuginfo"
+
+# Stand outside the memex workspace — this driver targets wasm32-wasip2
+# and must not be pulled into `cargo build --workspace` on the host.
+[workspace]

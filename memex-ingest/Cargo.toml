@@ -18,3 +18,9 @@ thiserror.workspace = true
 uuid.workspace = true
 bytes.workspace = true
 chrono.workspace = true
+
+# WASM+WIT corpus driver runtime — shared crates from AgentOS.
+# Path-based; no crates.io publish yet. See memex-ingest/README.md.
+agentos-wasm = { path = "../../AgentOS/crates/wasm" }
+agentos-events = { path = "../../AgentOS/crates/events" }
+wasmtime = { version = "41", features = ["component-model"] }

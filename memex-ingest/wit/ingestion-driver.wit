@@ -1,0 +1,88 @@
+package memex:ingest@0.1.0;
+
+/// Memex's WIT contract for sandboxed corpus-ingestion drivers.
+///
+/// Each driver is a WASM component compiled against this world.
+/// The host (memex-ingest) instantiates the driver with a read-only
+/// filesystem capability for the corpus root, then drives the iteration:
+/// init → next-chunk → ... → finish.
+///
+/// Drivers DO NOT choose target shards or consent tokens — those are
+/// host-side concerns. Drivers parse files and emit normalized chunks.
+world ingestion-driver {
+    /// Driver self-description, returned from `init`. Memex logs this
+    /// and uses `accepts` for diagnostics ("driver advertises *.mei but
+    /// the corpus has no .mei files").
+    record driver-metadata {
+        /// Human-readable name (e.g., "bhs-corpus", "ringhub-living").
+        name: string,
+        /// One-line description of what this driver ingests.
+        description: string,
+        /// Glob patterns this driver knows how to process
+        /// (e.g., "*.md", "*.mei", "*.json"). Informational; the
+        /// driver itself decides what files to read.
+        accepts: list<string>,
+    }
+
+    /// Configuration handed to the driver at init time.
+    record corpus-config {
+        /// Guest path inside the WASM sandbox where the corpus root is
+        /// mounted (read-only). For drivers using the default capability
+        /// builder this is "/corpus".
+        root: string,
+        /// Free-form key/value options. Driver-defined semantics.
+        /// Examples: ("locale", "en-US"), ("strip-frontmatter", "true").
+        options: list<tuple<string, string>>,
+    }
+
+    /// One unit of content emitted by the driver, fed to the librarian's
+    /// forward pass by the host.
+    record chunk {
+        /// Stable identifier for this chunk. Used as memex's content_id
+        /// at the /v1/ingest boundary. Should be deterministic across
+        /// re-runs (e.g., "history/people-cash.md" or
+        /// "harmonizer/1978-06::page-12").
+        id: string,
+        /// Normalized text that the librarian forward-passes through.
+        /// Driver decides what counts as "normalized" — strip
+        /// frontmatter, dedent code blocks, expand abbreviations,
+        /// whatever is right for the corpus.
+        text: string,
+        /// Back-reference for source resolution. Free-form string the
+        /// driver chooses; memex stores it alongside the chunk so a
+        /// retrieval hit can be traced back to original material.
+        /// Usually a path or path+offset (e.g., "history/people-cash.md"
+        /// or "harmonizer/1978-06.pdf#page=12").
+        source-ref: string,
+        /// Provenance metadata kept alongside the chunk in the archive.
+        /// Examples: ("title", "..."), ("author", "..."),
+        /// ("date", "1978-06-01"), ("tags", "history,founding").
+        metadata: list<tuple<string, string>>,
+    }
+
+    /// Error returned by any driver function.
+    record ingest-error {
+        /// Stable error category (e.g., "io", "parse", "config",
+        /// "exhausted-unexpectedly"). Used for routing in the host.
+        kind: string,
+        /// Human-readable message.
+        message: string,
+        /// Optional pointer at the source of the error
+        /// (file path, chunk id, etc.).
+        context: option<string>,
+    }
+
+    /// Called once before iteration begins. The driver returns its
+    /// self-description; on error the host aborts before any chunks
+    /// would have been emitted.
+    export init: func(config: corpus-config) -> result<driver-metadata, ingest-error>;
+
+    /// Pull the next chunk. Returns `none` when the corpus is exhausted.
+    /// The host loops on this until `none` or an error.
+    export next-chunk: func() -> result<option<chunk>, ingest-error>;
+
+    /// Called when the host decides iteration is done (natural exhaustion,
+    /// early termination, or after a fatal error). Drivers should flush
+    /// any in-memory state here. Idempotent.
+    export finish: func() -> result<_, ingest-error>;
+}

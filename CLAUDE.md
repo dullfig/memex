@@ -1,3 +1,7 @@
+> **Cross-session coordination:** Before making any design/scope decision, read `C:\Users\Daniel\.claude\projects\C--src-ringhub-integration\memory\MEMORY.md` first — that folder is the shared brain across all Claude sessions on this project. Decisions pinned there supersede anything in this repo's older docs.
+>
+> **If something has happened to Daniel:** read `C:\src\CARETAKER.md` — the project's caretaker-handoff document.
+
 # Memex — Semantic Indexing via Attention-Based Retrieval
 
 **Named after:** Vannevar Bush, *As We May Think* (Atlantic Monthly, July 1945) — the original associative memory machine vision.
@@ -179,7 +183,7 @@ The ringhub barbershop community (14K members) is the first deployment. The conc
 - Proactive behavior (cron-triggered "on this day" posts using memex retrieval)
 - Multi-channel support (DM, public thread, help bubble — each a buffer)
 
-The concierge organism lives at `C:\src\concierge` (separate repo). The ringhub web platform lives at `C:\src\RingHub`. The bridge between them is Donna (`C:\src\Donna`, FastAPI/WebSocket).
+The concierge organism lives at `C:\src\concierge` (separate repo). The ringhub web platform lives at `C:\src\RingHub`. RingHub talks to AgentOS directly over HTTP/WebSocket — the kernel exposes the listener; no intermediate bridge service.
 
 ## Related Projects
 
@@ -188,7 +192,6 @@ The concierge organism lives at `C:\src\concierge` (separate repo). The ringhub 
 - `C:\src\engram` — Hierarchical memory engine (substrate for memex's cache management)
 - `C:\src\concierge` — The ringhub concierge application (Bob)
 - `C:\src\RingHub` — The barbershop social platform (Django)
-- `C:\src\Donna` — Bridge service connecting RingHub ↔ AgentOS (FastAPI)
 - `C:\src\bhs-corpus` — Barbershop content corpus for training/testing
 
 ## Immediate Priorities

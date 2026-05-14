@@ -7,7 +7,12 @@ members = [
     "memex-shards",
     "memex-audit",
     "memex-consent",
+    "memex-cli",
 ]
+# WASM guest drivers live in their own cargo subtrees with their own
+# Cargo.lock — they target wasm32-wasip2, not the host target, and must
+# not be pulled into `cargo build --workspace`.
+exclude = ["memex-ingest/drivers"]
 
 [workspace.package]
 version = "0.1.0"
@@ -32,7 +37,8 @@ chrono = { version = "0.4", features = ["serde"] }
 sha2 = "0.10"
 async-trait = "0.1"
 hex = "0.4"
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", features = ["json", "blocking"] }
+clap = { version = "4", features = ["derive"] }
 
 # internal
 memex-shards = { path = "memex-shards" }
