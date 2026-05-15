@@ -1,0 +1,97 @@
+# Default smoke battery for memex ingested with the bhs-corpus driver.
+#
+# Each entry has:
+#   - name:   short label printed in PASS/FAIL output
+#   - query:  natural-language query sent to /v1/retrieve
+#   - expect: either {kind: positive, match_globs: [...]} or
+#             {kind: negative, max_top_score: N}
+#
+# Source-file globs match against the content_id returned by /v1/retrieve.
+# For bhs-corpus the content_id is the relative path under
+# C:/src/bhs-corpus/sources/, forward-slash-normalized.
+#
+# Negative-control thresholds are intentionally LOOSE for the first run.
+# After we see real scores on the negative queries, tune downward so a
+# meaningfully-high top-1 score for an off-topic query becomes a fail.
+
+shards:
+  - bhs.corpus.all
+
+top_k: 10
+actor: smoke-test
+
+queries:
+  # ---------------------------------------------------------------------
+  # Positive controls — these MUST hit the named files. If any fails,
+  # the bug is in the retrieval pipeline (memex, cortex, tokenizer,
+  # position mapping), not the corpus.
+  # ---------------------------------------------------------------------
+
+  - name: founder
+    query: "Who founded SPEBSQSA?"
+    expect:
+      kind: positive
+      match_globs:
+        - "history/people-owen-cash.md"
+        - "history/bhs-history.md"
+        - "history/timeline.md"
+      max_rank: 5
+
+  - name: bhs-rename
+    query: "When did SPEBSQSA rename itself to BHS?"
+    expect:
+      kind: positive
+      match_globs:
+        - "bhs-org/dei-history.md"
+        - "history/bhs-history.md"
+      max_rank: 5
+
+  - name: tags-and-polecats
+    query: "What is a polecat tag in barbershop?"
+    expect:
+      kind: positive
+      match_globs:
+        - "education/tags-and-polecats.md"
+      max_rank: 5
+
+  - name: 139th-street
+    query: "Who sang lead for the 139th Street quartet?"
+    expect:
+      kind: positive
+      match_globs:
+        - "history/quartet-139th-street.md"
+      max_rank: 5
+
+  - name: what-is-barbershop
+    query: "What is barbershop harmony and how does it work musically?"
+    expect:
+      kind: positive
+      match_globs:
+        - "bhs-org/what-is-barbershop.md"
+        - "education/singing-technique.md"
+        - "education/arranging-guide.md"
+      max_rank: 5
+
+  # ---------------------------------------------------------------------
+  # Negative controls — zero corpus presence. Top-1 score must come
+  # back below the threshold; if it doesn't, scoring is uncalibrated.
+  # Thresholds are PERMISSIVE for first run — tune after seeing data.
+  # ---------------------------------------------------------------------
+
+  - name: off-topic-tea
+    query: "What is the current price of tea in China?"
+    expect:
+      kind: negative
+      max_top_score: 1.0e9
+
+  - name: off-topic-world-cup
+    query: "Which team won the 2018 FIFA World Cup?"
+    expect:
+      kind: negative
+      max_top_score: 1.0e9
+
+  - name: off-topic-mrna
+    query: "How does an mRNA vaccine produce antibodies?"
+    expect:
+      kind: negative
+      max_top_score: 1.0e9

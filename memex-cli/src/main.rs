@@ -7,9 +7,16 @@
 //!               corpus-specific format and shape; the CLI is the thin
 //!               host that drives `init → next_chunk* → finish` and
 //!               forwards chunks at the HTTP boundary.
+//!   smoke     — run a YAML-configured battery of retrieval queries
+//!               against /v1/retrieve and report pass/fail per query.
+//!               Positive controls (glob-match on source_id) and
+//!               negative controls (top-1 score < threshold) together
+//!               disambiguate "retrieval bug" from "corpus thinness."
+//!               See memex-cli/smoke/bhs-corpus.yaml for the fixture.
 //!
-//! Future: wipe (drop a shard + sled state), smoke (run a query and
-//! pretty-print hits with resolved source ids).
+//! Future: wipe (drop a shard + sled state).
+
+mod smoke;
 
 use std::path::PathBuf;
 
@@ -34,6 +41,26 @@ struct Cli {
 enum Cmd {
     /// Load a WASM corpus driver and POST every chunk it emits to /v1/ingest.
     Ingest(IngestArgs),
+    /// Run a YAML-configured battery of retrieval queries against
+    /// /v1/retrieve and report pass/fail per query.
+    Smoke(SmokeArgs),
+}
+
+#[derive(clap::Args)]
+struct SmokeArgs {
+    /// Path to the YAML smoke config (queries + expectations).
+    #[arg(long)]
+    config: PathBuf,
+
+    /// Memex server URL.
+    #[arg(long, default_value = "http://localhost:7720")]
+    memex: String,
+
+    /// Override the actor identity sent in the X-Memex-Actor header
+    /// for retrieval requests. If unset, uses the value from the YAML
+    /// config (default "smoke-test").
+    #[arg(long)]
+    actor: Option<String>,
 }
 
 #[derive(clap::Args)]
@@ -95,7 +122,32 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.cmd {
         Cmd::Ingest(args) => run_ingest(args),
+        Cmd::Smoke(args) => run_smoke(args),
     }
+}
+
+// ---------------------------------------------------------------------------
+// Smoke
+// ---------------------------------------------------------------------------
+
+fn run_smoke(args: SmokeArgs) -> Result<()> {
+    let config = smoke::load_config(&args.config)?;
+    let actor = args.actor.clone().unwrap_or_else(|| config.actor.clone());
+
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(300))
+        .build()?;
+
+    let report = smoke::run(&client, &args.memex, &actor, &config)?;
+    smoke::print_report(&report, &config);
+
+    if !report.all_passed() {
+        // Non-zero exit so this is CI-friendly. `bail!` here would
+        // route through anyhow's default error printer and duplicate
+        // the report we just printed, so use process::exit directly.
+        std::process::exit(1);
+    }
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------

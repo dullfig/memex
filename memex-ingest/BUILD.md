@@ -93,5 +93,27 @@ cargo run -p memex-cli -- ingest \
 ```
 
 The CLI POSTs each chunk to `/v1/ingest`, which tokenizes and
-appends to the shard's KV cache via cortex. After completion, the
-canonical demo query goes through `/v1/retrieve`.
+appends to the shard's KV cache via cortex.
+
+## Retrieval smoke test
+
+With a corpus ingested into a live memex, run the smoke battery:
+
+```
+cargo run -p memex-cli -- smoke --config memex-cli/smoke/bhs-corpus.yaml
+```
+
+The battery is the cheap, repeatable check on retrieval quality.
+Each query has an explicit expectation:
+
+- **Positive** queries assert that at least one hit's `source_id`
+  matches a known-good source-file glob within top-K.
+- **Negative** queries assert that the top-1 score for an off-topic
+  query stays below a threshold.
+
+`PASS` per query plus a final tally. Exit 0 if everything passes; 1
+otherwise — usable in CI / regression scripts after tuning runs.
+
+The default fixture (`memex-cli/smoke/bhs-corpus.yaml`) ships with
+negative thresholds intentionally loose. Tune them down after the
+first run once you've seen real score magnitudes.

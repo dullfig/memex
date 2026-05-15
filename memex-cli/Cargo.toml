@@ -22,3 +22,7 @@ reqwest.workspace = true
 chrono.workspace = true
 uuid.workspace = true
 clap.workspace = true
+
+# `smoke` subcommand only. New deps; not promoted to workspace level.
+serde_yaml = "0.9"
+globset = "0.4"
